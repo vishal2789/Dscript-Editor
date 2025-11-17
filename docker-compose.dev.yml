@@ -1,0 +1,53 @@
+version: '3.8'
+
+services:
+  # Backend service - Development mode with hot reload
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: dscript-backend-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PEXELS_API_KEY=${PEXELS_API_KEY}
+      - UPLOAD_DIR=/app/uploads
+    volumes:
+      # Mount source code for hot reload
+      - ./backend:/app
+      - /app/node_modules
+      # Persist uploads, exports, and temp files
+      - ./backend/uploads:/app/uploads
+      - ./backend/exports:/app/exports
+      - ./backend/temp:/app/temp
+    networks:
+      - dscript-network
+    command: npm run dev
+
+  # Frontend service - Development mode with hot reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: dscript-frontend-dev
+    restart: unless-stopped
+    ports:
+      - "3000:5173"
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    volumes:
+      # Mount source code for hot reload
+      - ./frontend:/app
+      - /app/node_modules
+    networks:
+      - dscript-network
+    command: npm run dev -- --host 0.0.0.0
+
+networks:
+  dscript-network:
+    driver: bridge
+

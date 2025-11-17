@@ -1,0 +1,26 @@
+# Backend Dockerfile for Development
+FROM node:18-slim
+
+# Install FFmpeg and other dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install ALL dependencies (including devDependencies)
+RUN npm install
+
+# Create necessary directories
+RUN mkdir -p uploads uploads/thumbnails uploads/frames uploads/stock exports temp
+
+# Expose port
+EXPOSE 3001
+
+# Start with nodemon for hot reload
+CMD ["npm", "run", "dev"]
+

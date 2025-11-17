@@ -1,0 +1,49 @@
+# Node modules
+node_modules
+npm-debug.log
+
+# Build output
+dist
+build
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+*.md
+
+# Tests
+test
+tests
+*.test.js
+*.test.jsx
+*.spec.js
+*.spec.jsx
+coverage
+
+# CI/CD
+.github
+.gitlab-ci.yml
+.travis.yml
+
+# Vite
+vite.config.js.timestamp-*
+
