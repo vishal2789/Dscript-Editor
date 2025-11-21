@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import useEditorStore from '../store/useEditorStore';
-import { formatTime } from '../utils/time';
+import BackgroundPickerModal from './BackgroundPickerModal';
 
 function PropertiesPanel() {
   const {
@@ -10,12 +10,14 @@ function PropertiesPanel() {
     updateLayer,
     layout,
     setLayout,
+    setBackground,
     openSceneDeleteModal
   } = useEditorStore();
 
   const selectedScene = scenes.find(s => s.id === selectedSceneId);
   const [showLayout, setShowLayout] = useState(false);
   const [showTransitions, setShowTransitions] = useState(true);
+  const [backgroundModalOpen, setBackgroundModalOpen] = useState(false);
 
   return (
     <div className="h-full flex flex-col bg-white border-l border-gray-200">
@@ -25,6 +27,13 @@ function PropertiesPanel() {
           Properties
         </button>
       </div>
+
+      <BackgroundPickerModal
+        isOpen={backgroundModalOpen}
+        onClose={() => setBackgroundModalOpen(false)}
+        initialBackground={selectedScene?.background}
+        onApply={(background) => setBackground(selectedSceneId, background)}
+      />
 
       <div className="flex-1 overflow-y-auto">
         {selectedScene ? (
@@ -73,30 +82,15 @@ function PropertiesPanel() {
                 </p>
               </div>
 
-              {/* Duration */}
-              <div className="mb-4">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Duration
-                </label>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={formatTime(selectedScene.end - selectedScene.start)}
-                    className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded bg-gray-50"
-                  />
-                  <button className="px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 rounded">
-                    +
-                  </button>
-                </div>
-              </div>
-
               {/* Background */}
               <div className="mb-4">
                 <label className="block text-xs font-medium text-gray-700 mb-1">
                   Background
                 </label>
-                <button className="w-full px-3 py-2 text-xs border border-gray-300 rounded hover:border-blue-500 flex items-center justify-center">
+                <button
+                  onClick={() => setBackgroundModalOpen(true)}
+                  className="w-full px-3 py-2 text-xs border border-gray-300 rounded hover:border-blue-500 flex items-center justify-center"
+                >
                   +
                 </button>
               </div>

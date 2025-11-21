@@ -348,6 +348,70 @@ const useEditorStore = create((set, get) => {
     
     setLayout: (layout) => set({ layout }),
 
+    // ✅ NEW: Set background with background removal pipeline
+    setBackground: async (sceneId, background) => {
+      const project = get().project;
+      if (!project || !sceneId) return;
+      
+      const updateStatus = (status) => {
+        set({
+          sceneDeletionStatus: {
+            ...get().sceneDeletionStatus,
+            ...status
+          }
+        });
+      };
+      
+      try {
+        // Step 1: Process background removal with Python
+        updateStatus({ inProgress: true, progress: 10, message: 'Processing background removal…' });
+        
+        const processResponse = await axios.post('http://localhost:3001/api/background/process', {
+          projectId: project.id,
+          sceneId: sceneId,
+          backgroundType: background.type,
+          backgroundValue: background.value
+        });
+
+        if (!processResponse.data.success || !processResponse.data.jobId) {
+          throw new Error(processResponse.data.error || 'Processing failed');
+        }
+
+        const jobId = processResponse.data.jobId;
+        updateStatus({ inProgress: true, progress: 50, message: 'Background processed. Merging video…' });
+        
+        // Step 2: Merge processed scene back into main video
+        const mergeResponse = await axios.post('http://localhost:3001/api/background/merge', {
+          jobId: jobId
+        });
+
+        if (!mergeResponse.data.success) {
+          throw new Error(mergeResponse.data.error || 'Merge failed');
+        }
+
+        updateStatus({ inProgress: true, progress: 80, message: 'Refreshing project data…' });
+        
+        // Reload project to get updated video and frames
+        const projectResponse = await axios.get(`http://localhost:3001/api/project/${project.id}`);
+        get().setProject(projectResponse.data);
+        
+        // Update video URL if it changed
+        if (projectResponse.data.filePath) {
+          const cacheBustedUrl = `http://localhost:3001/uploads/${projectResponse.data.filePath}?t=${Date.now()}`;
+          get().setVideoUrl(cacheBustedUrl);
+        }
+        
+        updateStatus({ inProgress: true, progress: 100, message: 'Background applied successfully!' });
+        setTimeout(() => {
+          updateStatus({ inProgress: false, progress: 0, message: '' });
+        }, 1000);
+      } catch (error) {
+        console.error('Error replacing background:', error);
+        updateStatus({ inProgress: false, progress: 0, message: '' });
+        alert(error.response?.data?.error || error.message || 'Failed to replace background');
+      }
+    },
+
     updateLayer: (layerName, updates) => {
       const layers = { ...get().layers };
       layers[layerName] = { ...layers[layerName], ...updates };

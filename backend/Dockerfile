@@ -1,9 +1,12 @@
 # Backend Dockerfile - Node.js with FFmpeg
 FROM node:18-slim
 
-# Install FFmpeg and other dependencies
+# Install FFmpeg, Python, and other dependencies
 RUN apt-get update && apt-get install -y \
     ffmpeg \
+    python3 \
+    python3-pip \
+    python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -17,6 +20,13 @@ RUN npm ci --only=production
 
 # Copy application code
 COPY . .
+
+# Install Python dependencies for MediaPipe using virtual environment
+COPY requirements.txt ./
+RUN python3 -m venv /opt/venv && \
+    /opt/venv/bin/pip install --upgrade pip && \
+    /opt/venv/bin/pip install --no-cache-dir -r requirements.txt && \
+    ln -s /opt/venv/bin/python3 /usr/local/bin/python3-venv
 
 # Create necessary directories
 RUN mkdir -p uploads uploads/thumbnails uploads/frames uploads/stock exports temp

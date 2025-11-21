@@ -200,31 +200,44 @@ router.post('/delete', async (req, res) => {
       thumbnailCacheBust
     }));
 
-    // Shift transcript segments
+    // Shift transcript segments (temporary fallback - will be replaced by full regeneration)
+    console.log(`📝 Processing transcription segments (original count: ${(projectData.transcriptionSegments || []).length})`);
     let updatedSegments = (projectData.transcriptionSegments || []).reduce((acc, segment) => {
+      // Segments before the deleted scene: keep as-is
       if (segment.end <= sceneStart) {
         acc.push({ ...segment });
         return acc;
       }
 
+      // Segments after the deleted scene: shift back by scene duration
       if (segment.start >= sceneEnd) {
         acc.push({
           ...segment,
-          start: segment.start - sceneDuration,
-          end: segment.end - sceneDuration
+          start: Math.max(0, segment.start - sceneDuration),
+          end: Math.max(0, segment.end - sceneDuration)
         });
         return acc;
       }
 
+      // Segments overlapping with deleted scene: remove (will be regenerated)
+      console.log(`   ⚠️ Removing overlapping segment: ${segment.start}s - ${segment.end}s (overlaps with deleted scene ${sceneStart}s - ${sceneEnd}s)`);
       return acc;
     }, []);
 
+    console.log(`📝 After filtering: ${updatedSegments.length} segments remaining`);
+
     let fullTranscript = updatedSegments.map(s => s.text).join(' ');
 
+    // Always regenerate transcript from the updated video to ensure accuracy
     try {
-      console.log('📝 Regenerating transcript from updated video...');
+      console.log('📝 Regenerating full transcript from updated video...');
+      console.log(`   Video path: ${outputVideoPath}`);
+      console.log(`   Video exists: ${fs.existsSync(outputVideoPath)}`);
+      
       const transcription = await transcribeAudio(outputVideoPath);
+      
       if (transcription?.segments?.length) {
+        console.log(`   ✅ Received ${transcription.segments.length} segments from transcription service`);
         updatedSegments = transcription.segments.map((seg, idx) => ({
           id: `seg-${Date.now()}-${idx}`,
           start: seg.start,
@@ -233,10 +246,18 @@ router.post('/delete', async (req, res) => {
           text: seg.text
         }));
         fullTranscript = transcription.text || updatedSegments.map(s => s.text).join(' ');
-        console.log(`📝 Regenerated transcript with ${updatedSegments.length} segments`);
+        console.log(`✅ Successfully regenerated transcript with ${updatedSegments.length} segments`);
+        console.log(`   Full transcript length: ${fullTranscript.length} characters`);
+      } else {
+        console.warn('⚠️ Transcription service returned no segments, using filtered segments as fallback');
+        console.warn(`   Fallback segments count: ${updatedSegments.length}`);
       }
     } catch (err) {
-      console.warn('Failed to regenerate transcript, using fallback segments:', err.message);
+      console.error('❌ Failed to regenerate transcript:', err);
+      console.error('   Error details:', err.message);
+      console.error('   Stack:', err.stack);
+      console.warn(`⚠️ Using filtered segments as fallback (${updatedSegments.length} segments)`);
+      console.warn('   Note: Some transcription data may be missing. Please check transcription service configuration.');
     }
 
     const updatedProjectData = {

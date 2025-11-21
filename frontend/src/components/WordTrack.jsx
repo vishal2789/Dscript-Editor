@@ -56,8 +56,8 @@ function WordTrack({ segments: propSegments }) {
   }, [segments, wordBlocks]);
 
   return (
-    <div className="bg-white relative overflow-hidden flex-shrink-0 py-1">
-      <div className="relative w-full">
+    <div className="bg-black relative overflow-hidden flex-shrink-0 py-1" style={{ height: '40px' }}>
+      <div className="relative w-full h-20" style={{ height: '100%' }}>
         {/* Phrase background groups */}
         {phraseGroups.map((group) => (
           <div

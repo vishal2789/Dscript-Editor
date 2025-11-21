@@ -12,7 +12,9 @@ function VideoPreview() {
     setIsPlaying,
     words,
     layers,
-    layout
+    layout,
+    scenes,
+    selectedSceneId
   } = useEditorStore();
 
   const videoRef = useRef(null);
@@ -92,6 +94,9 @@ function VideoPreview() {
     );
   }
 
+  const selectedScene = scenes.find((scene) => scene.id === selectedSceneId);
+  const background = selectedScene?.background;
+
   const getAspectRatioClass = () => {
     switch (layout) {
       case '9:16':
@@ -112,7 +117,12 @@ function VideoPreview() {
 
   return (
     <div className="flex-1 bg-gray-900 relative flex items-center justify-center overflow-hidden">
-      <div className={`relative bg-black rounded-xl shadow-2xl overflow-hidden ${getAspectRatioClass()}`}>
+      <div className={`relative rounded-xl shadow-2xl overflow-hidden ${getAspectRatioClass()}`} style={{
+        backgroundColor: background?.type === 'color' ? background.value : '#000000',
+        backgroundImage: background?.type === 'image' ? `url(${background.value})` : 'none',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}>
       <video
         ref={videoRef}
         src={videoUrl}

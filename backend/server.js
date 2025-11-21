@@ -10,6 +10,7 @@ import exportRoutes from './routes/export.js';
 import captionRoutes from './routes/captions.js';
 import stockMediaRoutes from './routes/stockMedia.js';
 import scenesRoutes from './routes/scenes.js';
+import backgroundRoutes from './routes/background.js';
 
 // Load .env file from backend directory
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +53,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/captions', captionRoutes);
 app.use('/api/stock-media', stockMediaRoutes);
 app.use('/api/scenes', scenesRoutes);
+app.use('/api/background', backgroundRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

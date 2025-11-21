@@ -53,35 +53,100 @@ export async function transcribeAudio(filePath) {
     // If it's a video file, extract audio first (OpenAI works better with audio files)
     if (isVideo) {
       console.log('Video file detected, extracting audio...');
-      tempAudioPath = join(__dirname, '../uploads', `temp-audio-${Date.now()}.mp3`);
+      const tempDir = join(__dirname, '../uploads', 'temp');
+      await fs.ensureDir(tempDir);
+      tempAudioPath = join(tempDir, `temp-audio-${Date.now()}.mp3`);
       
-      await new Promise((resolve, reject) => {
-        ffmpeg(filePath)
-          .outputOptions(['-vn', '-acodec', 'libmp3lame', '-ar', '16000', '-ac', '1'])
-          .output(tempAudioPath)
-          .on('end', () => {
-            console.log('Audio extraction complete');
-            resolve();
-          })
-          .on('error', (err) => {
-            console.warn('Audio extraction failed, using original file:', err.message);
-            tempAudioPath = null; // Use original file if extraction fails
-            resolve();
-          })
-          .run();
-      });
-      
-      if (tempAudioPath && fs.existsSync(tempAudioPath)) {
-        fileToTranscribe = tempAudioPath;
-        console.log('Using extracted audio file for transcription');
+      try {
+        await new Promise((resolve, reject) => {
+          const ffmpegProcess = ffmpeg(filePath)
+            .outputOptions([
+              '-vn',              // No video
+              '-acodec', 'libmp3lame',  // MP3 codec
+              '-ar', '16000',     // Sample rate 16kHz (OpenAI recommended)
+              '-ac', '1',         // Mono channel
+              '-b:a', '64k',      // Bitrate
+              '-f', 'mp3'         // Force MP3 format
+            ])
+            .output(tempAudioPath)
+            .on('start', (cmd) => {
+              console.log('Audio extraction started:', cmd);
+            })
+            .on('progress', (progress) => {
+              console.log('Audio extraction progress:', progress.percent + '%');
+            })
+            .on('end', () => {
+              console.log('Audio extraction complete');
+              resolve();
+            })
+            .on('error', (err) => {
+              console.error('Audio extraction error:', err);
+              reject(err);
+            })
+            .run();
+        });
+        
+        // Validate extracted audio file
+        if (fs.existsSync(tempAudioPath)) {
+          const audioStats = await fs.stat(tempAudioPath);
+          if (audioStats.size === 0) {
+            throw new Error('Extracted audio file is empty');
+          }
+          console.log(`Extracted audio file: ${(audioStats.size / 1024).toFixed(2)} KB`);
+          fileToTranscribe = tempAudioPath;
+          console.log('Using extracted audio file for transcription');
+        } else {
+          throw new Error('Extracted audio file does not exist');
+        }
+      } catch (extractError) {
+        console.error('Failed to extract audio from video:', extractError);
+        // Clean up failed extraction
+        if (tempAudioPath && fs.existsSync(tempAudioPath)) {
+          await fs.remove(tempAudioPath).catch(() => {});
+        }
+        tempAudioPath = null;
+        // Try using original file as fallback
+        console.warn('Will attempt to use original video file (may fail if format not supported)');
       }
     }
     
-    // After choosing file to transcribe, enforce OpenAI size limit (25MB)
+    // After choosing file to transcribe, validate and enforce OpenAI size limit (25MB)
+    if (!fs.existsSync(fileToTranscribe)) {
+      throw new Error(`File not found: ${fileToTranscribe}`);
+    }
+    
     const transcribeStats = await fs.stat(fileToTranscribe);
+    if (transcribeStats.size === 0) {
+      throw new Error('File is empty and cannot be transcribed');
+    }
+    
     const transcribeFileSizeMB = transcribeStats.size / 1024 / 1024;
     if (transcribeFileSizeMB > 25) {
       throw new Error(`File too large: ${transcribeFileSizeMB.toFixed(2)} MB after audio extraction/compression. Please use a shorter clip or compress further (max 25 MB).`);
+    }
+    
+    // Validate file format using ffprobe
+    try {
+      await new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(fileToTranscribe, (err, metadata) => {
+          if (err) {
+            console.warn('FFprobe validation warning:', err.message);
+            // Don't fail, just warn - some files might still work
+            resolve();
+          } else {
+            const audioStream = metadata.streams?.find(s => s.codec_type === 'audio');
+            if (!audioStream && isVideo) {
+              reject(new Error('No audio stream found in video file'));
+            } else {
+              console.log(`File validation: codec=${audioStream?.codec_name || 'unknown'}, duration=${metadata.format?.duration || 'unknown'}s`);
+              resolve();
+            }
+          }
+        });
+      });
+    } catch (validateError) {
+      console.error('File validation error:', validateError);
+      throw new Error(`Invalid audio/video file: ${validateError.message}`);
     }
     
     // Read file as buffer
@@ -90,8 +155,25 @@ export async function transcribeAudio(filePath) {
     // Use correct filename - if we extracted audio, use audio filename
     const fileToUseName = tempAudioPath ? basename(tempAudioPath) : fileName;
     
-    // Determine MIME type - always use audio/mpeg for extracted audio
-    const mimeType = isVideo && tempAudioPath ? 'audio/mpeg' : 'audio/mpeg';
+    // Determine MIME type based on file extension
+    const fileExt = fileToUseName.split('.').pop()?.toLowerCase();
+    let mimeType = 'audio/mpeg'; // Default to MP3
+    if (fileExt === 'mp3' || fileExt === 'mpeg') {
+      mimeType = 'audio/mpeg';
+    } else if (fileExt === 'wav') {
+      mimeType = 'audio/wav';
+    } else if (fileExt === 'm4a') {
+      mimeType = 'audio/mp4';
+    } else if (fileExt === 'mp4') {
+      mimeType = 'audio/mp4'; // For audio-only MP4 files
+    } else if (fileExt === 'webm') {
+      mimeType = 'audio/webm';
+    } else if (isVideo && tempAudioPath) {
+      // Extracted audio is always MP3
+      mimeType = 'audio/mpeg';
+    }
+    
+    console.log(`File MIME type: ${mimeType} (extension: ${fileExt})`);
     
     console.log(`Preparing file for upload: ${fileToUseName} (${(fileBuffer.length / 1024).toFixed(2)} KB, type: ${mimeType})`);
     
